@@ -1,6 +1,20 @@
 # Changelog
 
-## [0.2.0] — Unreleased
+## [0.3.0] — Unreleased
+
+### Added
+- **Gemini analysis module** (`scripts/analyze-gemini.ts`): Batch multimodal analysis using Google GenAI SDK
+  - Batches 20-30 pairs per API call for efficient token usage
+  - Structured JSON output via `responseMimeType: "application/json"`
+  - Configurable model and API key environment variable
+- **PR comment generator** (`scripts/comment.ts`): Markdown summary with regression table, collapsible sections for intentional changes and noise, pre-filter breakdown
+- **CI orchestrator** (`scripts/ci.ts`): Single entrypoint for GitHub Actions
+  - Pipeline: capture → prefilter → Gemini analysis → PR comment
+  - Exits with code 1 on high-severity regressions
+  - Saves full check run to `.dojowatch/last-check.json`
+- Comment generation tests
+
+## [0.2.0]
 
 ### Added
 - **Pre-filter engine** (`scripts/prefilter.ts`): pixelmatch-based tiered classification
