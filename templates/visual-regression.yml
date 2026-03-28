@@ -1,0 +1,51 @@
+# DojoWatch Visual Regression — GitHub Actions Workflow Template
+#
+# Copy this file to your project's .github/workflows/ directory.
+# Adjust the dev server start command and port as needed.
+#
+# Required secrets:
+#   GOOGLE_GENAI_API_KEY — Gemini API key for AI analysis
+#   GITHUB_TOKEN — automatically provided by GitHub Actions
+
+name: Visual Regression
+
+on: [pull_request]
+
+jobs:
+  visual-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history for baseline comparison
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Start dev server
+        run: npm run dev &
+        env:
+          PORT: 3000
+
+      - name: Wait for server
+        run: npx wait-on http://localhost:3000 --timeout 60000
+
+      # Adjust the path to dojowatch scripts based on your setup:
+      # - If dojowatch is a git submodule: ./dojowatch/scripts/ci.ts
+      # - If cloned into the project: ./tools/dojowatch/scripts/ci.ts
+      - name: Run DojoWatch
+        run: npx tsx path/to/dojowatch/scripts/ci.ts --pr ${{ github.event.pull_request.number }}
+        env:
+          GOOGLE_GENAI_API_KEY: ${{ secrets.GOOGLE_GENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # Don't block PRs if DojoWatch infrastructure fails (API timeout, etc.)
+    # The visual regression check is informational — the real safety net is human review.
+    continue-on-error: true

@@ -1,0 +1,33 @@
+{
+  "project": "my-app",
+  "baseUrl": "http://localhost:3000",
+  "storybookUrl": "http://localhost:6006",
+  "viewports": [
+    { "name": "desktop", "width": 1440, "height": 900 },
+    { "name": "tablet", "width": 768, "height": 1024 },
+    { "name": "mobile", "width": 375, "height": 812 }
+  ],
+  "routes": [
+    "/",
+    "/dashboard",
+    "/settings"
+  ],
+  "maskSelectors": [
+    "[data-vr-mask]",
+    ".live-timestamp",
+    ".user-avatar"
+  ],
+  "engine": {
+    "local": {
+      "model": "claude"
+    },
+    "ci": {
+      "model": "gemini-3.1-pro-preview",
+      "apiKeyEnv": "GOOGLE_GENAI_API_KEY"
+    }
+  },
+  "prefilter": {
+    "threshold": 0.05,
+    "clusterMinPixels": 500
+  }
+}

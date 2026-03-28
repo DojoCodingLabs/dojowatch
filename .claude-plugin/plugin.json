@@ -1,0 +1,19 @@
+{
+  "name": "dojowatch",
+  "version": "0.1.0",
+  "description": "AI-native visual regression testing — capture, diff, and analyze UI changes with LLM vision",
+  "author": {
+    "name": "Dojo Coding LLC",
+    "url": "https://github.com/DojoCodingLabs"
+  },
+  "repository": "https://github.com/DojoCodingLabs/dojowatch",
+  "license": "MIT",
+  "keywords": [
+    "visual-regression",
+    "testing",
+    "playwright",
+    "ai",
+    "screenshot",
+    "diff"
+  ]
+}
