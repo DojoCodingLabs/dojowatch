@@ -1,0 +1,40 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "dojowatch",
+  "version": "0.4.0",
+  "description": "AI-native visual regression testing engine by Dojo Coding — capture screenshots with Playwright, pre-filter with pixelmatch, and analyze UI changes with LLM vision. Zero incremental cost.",
+  "owner": {
+    "name": "Dojo Coding",
+    "email": "team@dojocoding.io"
+  },
+  "plugins": [
+    {
+      "name": "dojowatch",
+      "description": "Visual regression testing powered by AI. Captures screenshots with Playwright, pre-filters with pixelmatch, and uses Claude (locally) or Gemini (in CI) to classify visual changes as regressions, intentional changes, or noise. Includes slash commands for interactive workflows and a CI orchestrator for GitHub Actions.",
+      "version": "0.4.0",
+      "author": {
+        "name": "Dojo Coding",
+        "email": "team@dojocoding.io"
+      },
+      "source": "./",
+      "homepage": "https://github.com/DojoCodingLabs/dojowatch",
+      "category": "testing",
+      "keywords": [
+        "claude-code",
+        "claude-code-plugin",
+        "claude",
+        "anthropic",
+        "claude-code-commands",
+        "claude-skills",
+        "visual-regression",
+        "testing",
+        "playwright",
+        "screenshot",
+        "pixelmatch",
+        "ci-cd",
+        "diff",
+        "ai"
+      ]
+    }
+  ]
+}

@@ -1,19 +1,30 @@
 {
   "name": "dojowatch",
   "version": "0.4.0",
-  "description": "AI-native visual regression testing — capture, diff, and analyze UI changes with LLM vision",
+  "description": "AI-native visual regression testing engine by Dojo Coding — capture screenshots with Playwright, pre-filter with pixelmatch, and analyze UI changes with LLM vision. Zero incremental cost.",
   "author": {
-    "name": "Dojo Coding LLC",
-    "url": "https://github.com/DojoCodingLabs"
+    "name": "Dojo Coding",
+    "url": "https://dojocoding.io"
   },
+  "homepage": "https://github.com/DojoCodingLabs/dojowatch",
   "repository": "https://github.com/DojoCodingLabs/dojowatch",
   "license": "MIT",
   "keywords": [
+    "claude-code",
+    "claude-code-plugin",
+    "claude",
+    "anthropic",
+    "claude-code-commands",
+    "claude-skills",
     "visual-regression",
     "testing",
     "playwright",
-    "ai",
     "screenshot",
-    "diff"
+    "pixelmatch",
+    "ai",
+    "diff",
+    "ci-cd",
+    "dojo-coding",
+    "dojowatch"
   ]
 }

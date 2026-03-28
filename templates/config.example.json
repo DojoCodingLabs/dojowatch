@@ -32,7 +32,7 @@
   },
   "supabase": {
     "url": "https://your-project.supabase.co",
-    "anonKey": "your-anon-key",
+    "anonKey": "eyJhb...your-anon-key-here",
     "serviceKeyEnv": "SUPABASE_SERVICE_KEY",
     "signedUrlExpiry": 3600
   }
