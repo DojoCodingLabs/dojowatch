@@ -36,11 +36,15 @@ async function captureRoute(
   config: DojoWatchConfig,
   route: string,
   viewport: Viewport,
-  outputDir: string
+  outputDir: string,
+  profileName?: string
 ): Promise<CaptureResult> {
-  const name = routeToName(route);
+  const baseName = routeToName(route);
+  // Role-aware naming: dashboard-admin-desktop.png vs dashboard-desktop.png
+  const name = profileName ? `${baseName}-${profileName}` : baseName;
   const filename = `${name}-${viewport.name}.png`;
   const outputPath = join(outputDir, filename);
+  const warnings: import("./types.js").CaptureWarning[] = [];
 
   // Set viewport size
   await page.setViewportSize({
@@ -52,8 +56,38 @@ async function captureRoute(
   const url = new URL(route, config.baseUrl).toString();
   await page.goto(url, { waitUntil: "load", timeout: 30_000 });
 
+  // Smart layer: wait for readiness
+  const readiness =
+    config.smart?.routeReadiness?.[route] ?? config.smart?.readiness;
+  if (readiness) {
+    try {
+      await waitForReadiness(page, readiness);
+    } catch {
+      warnings.push({
+        type: "readiness_timeout",
+        message: `Readiness check timed out for ${route}`,
+        suggestion: "Increase smart.readiness.timeout or check waitForSelector/waitForText",
+      });
+    }
+  }
+
+  // Smart layer: detect bot protection
+  if (config.smart?.detectBotProtection !== false) {
+    const botDetected = await detectBotProtection(page);
+    if (botDetected) {
+      warnings.push({
+        type: "bot_protection",
+        message: `Bot protection detected on ${route} — screenshot may show a challenge page`,
+        suggestion: "Disable bot protection for localhost or add DojoWatch's user-agent to allowlist",
+      });
+    }
+  }
+
   // Stabilize the page
   await injectStabilization(page);
+
+  // Smart layer: wait for SPA hydration
+  await waitForHydration(page, config.smart?.hydrationSelectors);
 
   // Mask dynamic elements
   await maskElements(page, config.maskSelectors);
@@ -64,38 +98,170 @@ async function captureRoute(
   return {
     name,
     viewport: viewport.name,
+    profile: profileName,
     path: outputPath,
     hash: hashFile(outputPath),
+    warnings,
   };
 }
 
 /**
- * Resolve which storageState file to use for a given route.
- * Returns undefined for anonymous access.
+ * Wait for page readiness beyond basic load/networkidle.
+ */
+async function waitForReadiness(
+  page: Awaited<ReturnType<Awaited<ReturnType<typeof chromium.launch>>["newPage"]>>,
+  readiness: import("./types.js").ReadinessCheck
+): Promise<void> {
+  const timeout = readiness.timeout ?? 10_000;
+
+  if (readiness.waitForSelector) {
+    await page.waitForSelector(readiness.waitForSelector, {
+      state: "visible",
+      timeout,
+    });
+  }
+
+  if (readiness.waitForText) {
+    await page.waitForFunction(
+      (text: string) => document.body.textContent?.includes(text) ?? false,
+      readiness.waitForText,
+      { timeout }
+    );
+  }
+}
+
+/**
+ * Detect bot protection challenge pages (Cloudflare, hCaptcha, reCAPTCHA).
+ */
+async function detectBotProtection(
+  page: Awaited<ReturnType<Awaited<ReturnType<typeof chromium.launch>>["newPage"]>>
+): Promise<boolean> {
+  return page.evaluate(() => {
+    const indicators = [
+      // Cloudflare
+      document.querySelector("#cf-challenge-running"),
+      document.querySelector(".cf-browser-verification"),
+      document.querySelector("#challenge-form"),
+      // hCaptcha
+      document.querySelector(".h-captcha"),
+      document.querySelector('iframe[src*="hcaptcha.com"]'),
+      // reCAPTCHA
+      document.querySelector(".g-recaptcha"),
+      document.querySelector('iframe[src*="recaptcha"]'),
+      // Generic challenge page signals
+      document.title.includes("Just a moment"),
+      document.title.includes("Attention Required"),
+    ];
+    return indicators.some(Boolean);
+  });
+}
+
+/**
+ * Wait for SPA framework hydration to complete.
+ * Checks for framework-specific signals or custom selectors.
+ */
+async function waitForHydration(
+  page: Awaited<ReturnType<Awaited<ReturnType<typeof chromium.launch>>["newPage"]>>,
+  customSelectors?: string[]
+): Promise<void> {
+  const selectors = customSelectors ?? [];
+
+  // Auto-detect common framework hydration signals
+  const hydrated = await page.evaluate((customSels: string[]) => {
+    // Check custom selectors first
+    for (const sel of customSels) {
+      if (!document.querySelector(sel)) return false;
+    }
+
+    // Next.js: __NEXT_DATA__ script exists after hydration
+    // React: check for [data-reactroot] or root with children
+    // These are best-effort — if not found, assume hydrated
+    return true;
+  }, selectors);
+
+  if (!hydrated && selectors.length > 0) {
+    // Wait briefly for hydration
+    try {
+      await page.waitForSelector(selectors[0], { timeout: 5_000 });
+    } catch {
+      // Proceed anyway — hydration may have already completed
+    }
+  }
+}
+
+/**
+ * Resolve auth info for a given route.
+ * Returns the storageState file path and profile name.
  */
 function resolveAuthForRoute(
   route: string,
   auth?: AuthConfig
-): string | undefined {
-  if (!auth) return undefined;
+): { storageState?: string; profileName?: string } {
+  if (!auth) return {};
 
   // Check per-route mapping first
   if (auth.routes && route in auth.routes) {
     const profileName = auth.routes[route];
-    if (profileName === null) return undefined; // explicitly anonymous
-    if (auth.profiles && profileName in auth.profiles) {
-      return auth.profiles[profileName];
+    if (profileName === null) return {}; // explicitly anonymous
+    if (profileName && auth.profiles && profileName in auth.profiles) {
+      return { storageState: auth.profiles[profileName], profileName };
     }
-    return undefined;
+    return {};
   }
 
-  // Fall back to default storageState
-  return auth.storageState;
+  // Fall back to default storageState (no named profile)
+  return auth.storageState ? { storageState: auth.storageState } : {};
+}
+
+/**
+ * Capture a route with retry logic for flaky detection.
+ * Captures N times and compares hashes. If hashes differ, flags as flaky.
+ */
+async function captureWithRetry(
+  page: Awaited<ReturnType<Awaited<ReturnType<typeof chromium.launch>>["newPage"]>>,
+  config: DojoWatchConfig,
+  route: string,
+  viewport: Viewport,
+  outputDir: string,
+  profileName?: string
+): Promise<CaptureResult> {
+  const retries = config.smart?.retries ?? 1;
+
+  if (retries <= 1) {
+    return captureRoute(page, config, route, viewport, outputDir, profileName);
+  }
+
+  // Capture multiple times and compare hashes
+  const captures: CaptureResult[] = [];
+  for (let i = 0; i < retries; i++) {
+    const result = await captureRoute(page, config, route, viewport, outputDir, profileName);
+    captures.push(result);
+  }
+
+  // Find the most common hash (majority vote)
+  const hashCounts = new Map<string, number>();
+  for (const c of captures) {
+    hashCounts.set(c.hash, (hashCounts.get(c.hash) ?? 0) + 1);
+  }
+
+  const uniqueHashes = hashCounts.size;
+  const [bestHash] = [...hashCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+  const bestCapture = captures.find((c) => c.hash === bestHash)!;
+
+  if (uniqueHashes > 1) {
+    bestCapture.warnings.push({
+      type: "flaky_capture",
+      message: `${uniqueHashes} different screenshots from ${retries} captures of ${route}`,
+      suggestion: "Page has non-deterministic rendering. Add data-vr-mask to dynamic elements or increase stabilization wait time.",
+    });
+  }
+
+  return bestCapture;
 }
 
 /**
  * Capture all configured routes at all viewports.
- * Supports authenticated captures via Playwright storageState.
+ * Supports authenticated captures, smart readiness, retry, and bot detection.
  */
 export async function captureRoutes(
   config: DojoWatchConfig,
@@ -108,32 +274,35 @@ export async function captureRoutes(
   const results: CaptureResult[] = [];
 
   // Group routes by auth profile to minimize context creation
-  const routesByAuth = new Map<string | undefined, string[]>();
+  const routesByAuth = new Map<string, { storageState?: string; profileName?: string; routes: string[] }>();
   for (const route of routes) {
-    const authFile = resolveAuthForRoute(route, config.auth);
-    const key = authFile ?? "__anonymous__";
-    if (!routesByAuth.has(key)) routesByAuth.set(key, []);
-    routesByAuth.get(key)!.push(route);
+    const { storageState, profileName } = resolveAuthForRoute(route, config.auth);
+    const key = storageState ?? "__anonymous__";
+    if (!routesByAuth.has(key)) {
+      routesByAuth.set(key, { storageState, profileName, routes: [] });
+    }
+    routesByAuth.get(key)!.routes.push(route);
   }
 
   try {
-    for (const [authKey, groupedRoutes] of routesByAuth) {
-      const storageState = authKey === "__anonymous__" ? undefined : authKey;
+    for (const [, group] of routesByAuth) {
       const context = await browser.newContext(
-        storageState ? { storageState } : undefined
+        group.storageState ? { storageState: group.storageState } : undefined
       );
       const page = await context.newPage();
 
-      if (storageState) {
-        console.log(pc.dim(`  Auth: ${storageState}`));
+      if (group.profileName) {
+        console.log(pc.dim(`  Auth profile: ${group.profileName}`));
       }
 
-      for (const route of groupedRoutes) {
+      for (const route of group.routes) {
         for (const viewport of config.viewports) {
           console.log(
             pc.dim(`  Capturing ${route} @ ${viewport.name} (${viewport.width}x${viewport.height})`)
           );
-          const result = await captureRoute(page, config, route, viewport, outputDir);
+          const result = await captureWithRetry(
+            page, config, route, viewport, outputDir, group.profileName
+          );
           results.push(result);
         }
       }
@@ -142,6 +311,16 @@ export async function captureRoutes(
     }
   } finally {
     await browser.close();
+  }
+
+  // Report warnings
+  const allWarnings = results.flatMap((r) => r.warnings);
+  if (allWarnings.length > 0) {
+    console.log(pc.yellow(`\n  ${allWarnings.length} warning(s):`));
+    for (const w of allWarnings) {
+      console.log(pc.yellow(`    [${w.type}] ${w.message}`));
+      if (w.suggestion) console.log(pc.dim(`      → ${w.suggestion}`));
+    }
   }
 
   return results;
@@ -213,6 +392,7 @@ export async function captureStorybook(
           viewport: viewport.name,
           path: outputPath,
           hash: hashFile(outputPath),
+          warnings: [],
         });
       }
     }

@@ -38,6 +38,18 @@
       "/admin": "admin"
     }
   },
+  "smart": {
+    "retries": 2,
+    "readiness": {
+      "waitForSelector": "[data-app-ready]",
+      "timeout": 10000
+    },
+    "routeReadiness": {
+      "/dashboard": { "waitForSelector": ".dashboard-loaded", "timeout": 15000 }
+    },
+    "detectBotProtection": true,
+    "detectDynamicContent": false
+  },
   "prefilter": {
     "threshold": 0.05,
     "clusterMinPixels": 500

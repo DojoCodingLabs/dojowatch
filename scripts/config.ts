@@ -107,6 +107,16 @@ function mergeConfig(
           routes: overrides.auth.routes,
         }
       : undefined,
+    smart: overrides.smart
+      ? {
+          retries: overrides.smart.retries ?? 1,
+          readiness: overrides.smart.readiness,
+          routeReadiness: overrides.smart.routeReadiness,
+          detectBotProtection: overrides.smart.detectBotProtection ?? true,
+          detectDynamicContent: overrides.smart.detectDynamicContent ?? false,
+          hydrationSelectors: overrides.smart.hydrationSelectors,
+        }
+      : undefined,
     supabase: overrides.supabase
       ? {
           url: overrides.supabase.url,

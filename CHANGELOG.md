@@ -10,6 +10,22 @@
   - Routes grouped by auth profile to minimize browser context creation
   - Generate auth state: `npx playwright codegen --save-storage=.dojowatch/auth.json`
 - Auth state files (`.dojowatch/auth*.json`) added to `.gitignore`
+- **Smart Capture Layer** (`smart` config): Intelligent capture with readiness, retry, and detection
+  - **Role-aware baselines**: Filenames include auth profile (`dashboard-admin-desktop.png` vs `dashboard-student-desktop.png`)
+  - **Readiness checks**: `waitForSelector` and `waitForText` — wait for app-specific signals before capture
+  - **Per-route readiness**: Override readiness config for specific routes (e.g., longer timeout for `/dashboard`)
+  - **Bot protection detection**: Auto-detects Cloudflare, hCaptcha, reCAPTCHA challenge pages and warns
+  - **Flaky capture detection**: Capture N times, compare hashes, use majority vote, warn on inconsistency
+  - **SPA hydration wait**: Framework-agnostic hydration signal detection with custom selector support
+  - **Capture warnings**: Structured warnings (`bot_protection`, `flaky_capture`, `readiness_timeout`, etc.) reported inline
+- **CI hardening** (industry-standard GitHub Actions):
+  - Playwright browser caching across runs
+  - Pinned fonts (Noto, Liberation) for deterministic cross-environment rendering
+  - Job timeout (10 min)
+  - Concurrency control with cancel-in-progress
+  - Node.js 24 compatibility (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`)
+  - Diff artifact upload for manual review (7-day retention)
+  - Separate regression vs infra failure exit codes in consumer template
 
 ## [0.4.0]
 

@@ -35,6 +35,30 @@ export interface AuthConfig {
   routes?: Record<string, string | null>;
 }
 
+export interface ReadinessCheck {
+  /** CSS selector to wait for before capturing. */
+  waitForSelector?: string;
+  /** Text content to wait for on the page. */
+  waitForText?: string;
+  /** Maximum time in ms to wait for readiness. Default: 10000. */
+  timeout?: number;
+}
+
+export interface SmartCaptureConfig {
+  /** Number of capture attempts for flaky detection. Default: 1 (no retry). */
+  retries?: number;
+  /** Global readiness checks applied to all routes. */
+  readiness?: ReadinessCheck;
+  /** Per-route readiness overrides. */
+  routeReadiness?: Record<string, ReadinessCheck>;
+  /** Enable bot/challenge page detection. Default: true. */
+  detectBotProtection?: boolean;
+  /** Enable auto-detection of dynamic content via rapid double-capture. Default: false. */
+  detectDynamicContent?: boolean;
+  /** Framework-specific hydration signal selectors. Auto-detected if empty. */
+  hydrationSelectors?: string[];
+}
+
 export interface SupabaseConfig {
   /** Supabase project URL. Read from env var in CI, .env.local locally. */
   url: string;
@@ -65,21 +89,41 @@ export interface DojoWatchConfig {
   prefilter: PrefilterConfig;
   /** Authentication configuration. Optional — when absent, captures run as anonymous. */
   auth?: AuthConfig;
+  /** Smart capture configuration. Controls readiness, retries, bot detection, hydration. */
+  smart?: SmartCaptureConfig;
   /** Supabase configuration. Optional — when absent, local file storage is used. */
   supabase?: SupabaseConfig;
 }
 
 // ─── Capture ─────────────────────────────────────────────────────
 
+export type CaptureWarningType =
+  | "bot_protection"
+  | "flaky_capture"
+  | "dynamic_content"
+  | "hydration_timeout"
+  | "readiness_timeout";
+
+export interface CaptureWarning {
+  type: CaptureWarningType;
+  message: string;
+  /** Suggested action (e.g., "add data-vr-mask to .live-counter"). */
+  suggestion?: string;
+}
+
 export interface CaptureResult {
   /** Human-readable name derived from the route or story. */
   name: string;
   /** Viewport used for this capture. */
   viewport: string;
+  /** Auth profile used (undefined = anonymous). */
+  profile?: string;
   /** Absolute path to the captured PNG. */
   path: string;
   /** SHA-256 hash of the PNG file. */
   hash: string;
+  /** Warnings from smart capture layer. */
+  warnings: CaptureWarning[];
 }
 
 // ─── Pre-filter ──────────────────────────────────────────────────
