@@ -1,6 +1,19 @@
 # Changelog
 
-## [0.1.0] — Unreleased
+## [0.2.0] — Unreleased
+
+### Added
+- **Pre-filter engine** (`scripts/prefilter.ts`): pixelmatch-based tiered classification
+  - SHA-256 hash comparison for instant SKIP detection
+  - pixelmatch with configurable threshold (default 0.05) and anti-alias filtering
+  - Spatial cluster detection using 8-connectivity flood-fill
+  - Three tiers: SKIP (0 tokens), FAST_CHECK (~600 tokens), FULL_ANALYSIS (~2400 tokens)
+  - Diff overlay PNG generation for visual inspection
+  - Standalone CLI entrypoint with JSON report output
+- **Type declaration** for pixelmatch v6 (`scripts/pixelmatch.d.ts`)
+- **Prefilter tests** with fixture PNG pairs covering all tier scenarios
+
+## [0.1.0]
 
 ### Added
 - Initial project structure as Claude Code plugin + standalone scripts
