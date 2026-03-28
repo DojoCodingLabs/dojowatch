@@ -5,7 +5,10 @@ import type { AnalysisResult, CheckRun, DiffResult } from "./types.js";
 /**
  * Generate a markdown comment body from analysis results.
  */
-export function generateCommentMarkdown(checkRun: CheckRun): string {
+export function generateCommentMarkdown(
+  checkRun: CheckRun,
+  diffUrls?: Map<string, string>
+): string {
   const { summary, analysisResults, prefilterResults } = checkRun;
   const regressions = collectByType(analysisResults, "REGRESSION");
   const intentional = collectByType(analysisResults, "INTENTIONAL");
@@ -40,15 +43,17 @@ export function generateCommentMarkdown(checkRun: CheckRun): string {
     lines.push("");
     lines.push("| Severity | Element | Description | Suggested Fix |");
     lines.push("|----------|---------|-------------|---------------|");
-    for (const { screenshot, diff } of regressions) {
+    for (const { screenshot, diff, name } of regressions) {
       const sev =
         diff.severity === "high"
           ? "🔴 high"
           : diff.severity === "medium"
             ? "🟡 medium"
             : "🟢 low";
+      const diffUrl = diffUrls?.get(name);
+      const thumbnailCol = diffUrl ? ` [![diff](${diffUrl})](${diffUrl})` : "";
       lines.push(
-        `| ${sev} | ${screenshot}: ${diff.element} | ${diff.description} | ${diff.suggested_fix ?? "—"} |`
+        `| ${sev} | ${screenshot}: ${diff.element}${thumbnailCol} | ${diff.description} | ${diff.suggested_fix ?? "—"} |`
       );
     }
     lines.push("");
@@ -111,14 +116,15 @@ export function generateCommentMarkdown(checkRun: CheckRun): string {
 function collectByType(
   results: AnalysisResult[],
   type: DiffResult["type"]
-): Array<{ screenshot: string; diff: DiffResult }> {
-  const collected: Array<{ screenshot: string; diff: DiffResult }> = [];
+): Array<{ screenshot: string; name: string; diff: DiffResult }> {
+  const collected: Array<{ screenshot: string; name: string; diff: DiffResult }> = [];
 
   for (const result of results) {
     for (const diff of result.diffs) {
       if (diff.type === type) {
         collected.push({
           screenshot: `${result.name} (${result.viewport})`,
+          name: result.name,
           diff,
         });
       }

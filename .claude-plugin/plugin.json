@@ -1,6 +1,6 @@
 {
   "name": "dojowatch",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "AI-native visual regression testing — capture, diff, and analyze UI changes with LLM vision",
   "author": {
     "name": "Dojo Coding LLC",

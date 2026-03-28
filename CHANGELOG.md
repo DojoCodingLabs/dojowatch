@@ -1,6 +1,20 @@
 # Changelog
 
-## [0.3.0] — Unreleased
+## [0.4.0] — Unreleased
+
+### Added
+- **Supabase data layer** (`scripts/supabase.ts`): Full Supabase integration for shared storage
+  - Upload runs, diffs, and baselines to Supabase Storage (private buckets)
+  - Insert `vr_runs`, `vr_diffs`, `vr_baselines` rows with structured metadata
+  - Signed URL generation for embedding diff thumbnails in PR comments
+  - Remote baseline management: fetch, promote, list across team
+  - `uploadCheckRun()` orchestrates the full upload in one call
+- **Database migration** (`migrations/001_initial_schema.sql`): Tables, indexes, RLS policies
+- **`--upload` flag** on CI orchestrator: pushes results to Supabase when configured
+- **Diff thumbnails in PR comments**: When Supabase is configured, regression rows include clickable diff image links
+- **Optional Supabase config**: `supabase` field in config.json is optional — local file storage works without it
+
+## [0.3.0]
 
 ### Added
 - **Gemini analysis module** (`scripts/analyze-gemini.ts`): Batch multimodal analysis using Google GenAI SDK

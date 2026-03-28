@@ -16,6 +16,7 @@ import { captureRoutes, captureStorybook } from "./capture.js";
 import { prefilterAll } from "./prefilter.js";
 import { analyzeWithGemini } from "./analyze-gemini.js";
 import { generateCommentMarkdown, postComment } from "./comment.js";
+import { createServiceClient, uploadCheckRun, getSignedDiffUrls } from "./supabase.js";
 import type { CheckRun } from "./types.js";
 
 async function main(): Promise<void> {
@@ -23,6 +24,7 @@ async function main(): Promise<void> {
   const prArg = args.find((a) => a.startsWith("--pr="))?.split("=")[1]
     ?? args[args.indexOf("--pr") + 1];
   const prNumber = prArg ? parseInt(prArg, 10) : undefined;
+  const uploadFlag = args.includes("--upload");
 
   const projectRoot = findProjectRoot();
   if (!projectRoot) {
@@ -124,14 +126,43 @@ async function main(): Promise<void> {
     },
   };
 
-  // Save check run
+  // Save check run locally
   const checkRunPath = join(dojowatchDir, "last-check.json");
   writeFileSync(checkRunPath, JSON.stringify(checkRun, null, 2));
 
-  // ── Step 4: PR Comment ─────────────────────────────────────────
+  // ── Step 4: Upload to Supabase ─────────────────────────────────
+  let runId: string | undefined;
+  if (uploadFlag && config.supabase) {
+    console.log(pc.bold("\nStep 4: Uploading to Supabase..."));
+    const supabaseClient = createServiceClient(config);
+    runId = await uploadCheckRun(supabaseClient, checkRun, config, {
+      prNumber,
+      engine: "gemini",
+      capturesDir: join(dojowatchDir, "captures"),
+      diffsDir: join(dojowatchDir, "diffs"),
+    });
+  } else if (uploadFlag && !config.supabase) {
+    console.log(pc.yellow("\n  --upload flag set but no supabase config. Skipping."));
+  }
+
+  // ── Step 5: PR Comment ─────────────────────────────────────────
   if (prNumber) {
-    console.log(pc.bold(`\nStep 4: Posting comment to PR #${prNumber}...`));
-    const markdown = generateCommentMarkdown(checkRun);
+    console.log(pc.bold(`\nStep 5: Posting comment to PR #${prNumber}...`));
+
+    // If we uploaded to Supabase, enrich comment with signed diff URLs
+    let diffUrls: Map<string, string> | undefined;
+    if (runId && config.supabase) {
+      const supabaseClient = createServiceClient(config);
+      diffUrls = await getSignedDiffUrls(
+        supabaseClient,
+        runId,
+        config.project,
+        prefilterResults,
+        config.supabase.signedUrlExpiry
+      );
+    }
+
+    const markdown = generateCommentMarkdown(checkRun, diffUrls);
     postComment(prNumber, markdown);
   } else {
     console.log(pc.dim("\nNo --pr flag. Skipping PR comment."));

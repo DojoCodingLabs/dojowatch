@@ -26,6 +26,17 @@ export interface PrefilterConfig {
   clusterMinPixels: number;
 }
 
+export interface SupabaseConfig {
+  /** Supabase project URL. Read from env var in CI, .env.local locally. */
+  url: string;
+  /** Supabase anon key for client-side access. */
+  anonKey: string;
+  /** Env var name for the service role key (CI uploads). Default: "SUPABASE_SERVICE_KEY". */
+  serviceKeyEnv: string;
+  /** Signed URL expiration in seconds. Default: 3600 (1 hour). */
+  signedUrlExpiry: number;
+}
+
 export interface DojoWatchConfig {
   /** Project identifier (used for multi-project support). */
   project: string;
@@ -43,6 +54,8 @@ export interface DojoWatchConfig {
   engine: EngineConfig;
   /** Pre-filter configuration. */
   prefilter: PrefilterConfig;
+  /** Supabase configuration. Optional — when absent, local file storage is used. */
+  supabase?: SupabaseConfig;
 }
 
 // ─── Capture ─────────────────────────────────────────────────────
@@ -157,4 +170,47 @@ export interface RouteMap {
   routes: Record<string, string[]>;
   /** Maps Storybook story IDs to source files. */
   stories: Record<string, string[]>;
+}
+
+// ─── Supabase Database Rows ──────────────────────────────────────
+
+export interface VrRunRow {
+  id: string;
+  project: string;
+  pr_number: number | null;
+  branch: string;
+  commit_sha: string;
+  status: "pending" | "pass" | "fail";
+  total_diffs: number;
+  regressions_count: number;
+  engine: "claude" | "gemini";
+  created_at: string;
+}
+
+export interface VrDiffRow {
+  id: string;
+  run_id: string;
+  name: string;
+  viewport: string;
+  baseline_storage_path: string | null;
+  current_storage_path: string | null;
+  diff_storage_path: string | null;
+  pixel_diff_percent: number;
+  tier: Tier;
+  analysis: DiffResult[] | null;
+  severity: Severity | null;
+  review_status: "pending" | "approved" | "rejected";
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+}
+
+export interface VrBaselineRow {
+  id: string;
+  project: string;
+  name: string;
+  viewport: string;
+  storage_path: string;
+  hash: string;
+  approved_at: string;
+  approved_by: string | null;
 }

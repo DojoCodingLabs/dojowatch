@@ -100,5 +100,13 @@ function mergeConfig(
       ...defaults.prefilter,
       ...overrides.prefilter,
     },
+    supabase: overrides.supabase
+      ? {
+          url: overrides.supabase.url,
+          anonKey: overrides.supabase.anonKey,
+          serviceKeyEnv: overrides.supabase.serviceKeyEnv ?? "SUPABASE_SERVICE_KEY",
+          signedUrlExpiry: overrides.supabase.signedUrlExpiry ?? 3600,
+        }
+      : undefined,
   };
 }
