@@ -269,8 +269,155 @@ async function captureWithRetry(
 }
 
 /**
- * Capture all configured routes at all viewports.
- * Supports authenticated captures, smart readiness, retry, and bot detection.
+ * Resolve Playwright device descriptors from DevicePreset names.
+ * Falls back to the raw viewport config if no preset matches.
+ */
+function resolveViewports(config: DojoWatchConfig): Viewport[] {
+  const DEVICE_MAP: Record<string, Partial<Viewport>> = {
+    "iPhone 14": { name: "iPhone 14", width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)" },
+    "iPhone 14 Pro Max": { name: "iPhone 14 Pro Max", width: 430, height: 932, deviceScaleFactor: 3, isMobile: true },
+    "iPhone SE": { name: "iPhone SE", width: 375, height: 667, deviceScaleFactor: 2, isMobile: true },
+    "iPad": { name: "iPad", width: 768, height: 1024, deviceScaleFactor: 2, isMobile: true },
+    "iPad Pro": { name: "iPad Pro", width: 1024, height: 1366, deviceScaleFactor: 2, isMobile: true },
+    "Pixel 7": { name: "Pixel 7", width: 412, height: 915, deviceScaleFactor: 2.625, isMobile: true },
+    "Galaxy S23": { name: "Galaxy S23", width: 360, height: 780, deviceScaleFactor: 3, isMobile: true },
+    "Desktop Chrome": { name: "Desktop Chrome", width: 1280, height: 720 },
+    "Desktop Firefox": { name: "Desktop Firefox", width: 1280, height: 720 },
+    "Desktop Safari": { name: "Desktop Safari", width: 1280, height: 720 },
+  };
+
+  const viewports = [...config.viewports];
+
+  if (config.devices) {
+    for (const preset of config.devices) {
+      const device = DEVICE_MAP[preset];
+      if (device) {
+        viewports.push({
+          name: device.name ?? preset,
+          width: device.width ?? 1280,
+          height: device.height ?? 720,
+          deviceScaleFactor: device.deviceScaleFactor,
+          isMobile: device.isMobile,
+          userAgent: device.userAgent,
+        });
+      }
+    }
+  }
+
+  return viewports;
+}
+
+/**
+ * Build the list of capture jobs (route x viewport x scheme x locale).
+ */
+interface CaptureJob {
+  route: string;
+  viewport: Viewport;
+  colorScheme?: "light" | "dark";
+  locale?: string;
+  profileName?: string;
+  storageState?: string;
+}
+
+function buildCaptureJobs(config: DojoWatchConfig, routes: string[]): CaptureJob[] {
+  const viewports = resolveViewports(config);
+  const schemes = config.colorSchemes ?? [undefined];
+  const locales = config.locales ?? [undefined];
+  const jobs: CaptureJob[] = [];
+
+  for (const route of routes) {
+    const { storageState, profileName } = resolveAuthForRoute(route, config.auth);
+    for (const viewport of viewports) {
+      for (const scheme of schemes) {
+        for (const locale of locales) {
+          jobs.push({
+            route,
+            viewport,
+            colorScheme: scheme as "light" | "dark" | undefined,
+            locale: locale as string | undefined,
+            profileName,
+            storageState,
+          });
+        }
+      }
+    }
+  }
+
+  return jobs;
+}
+
+/**
+ * Execute a single capture job with timeout protection.
+ */
+async function executeCaptureJob(
+  browser: Awaited<ReturnType<typeof chromium.launch>>,
+  config: DojoWatchConfig,
+  job: CaptureJob,
+  outputDir: string
+): Promise<CaptureResult> {
+  const timeout = config.smart?.routeTimeout ?? 30_000;
+
+  const context = await browser.newContext({
+    ...(job.storageState ? { storageState: job.storageState } : {}),
+    ...(job.viewport.deviceScaleFactor ? { deviceScaleFactor: job.viewport.deviceScaleFactor } : {}),
+    ...(job.viewport.isMobile !== undefined ? { isMobile: job.viewport.isMobile } : {}),
+    ...(job.viewport.userAgent ? { userAgent: job.viewport.userAgent } : {}),
+    ...(job.colorScheme ? { colorScheme: job.colorScheme } : {}),
+    ...(job.locale ? { locale: job.locale } : {}),
+  });
+
+  try {
+    const page = await context.newPage();
+
+    const result = await Promise.race([
+      captureWithRetry(page, config, job.route, job.viewport, outputDir, job.profileName),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Capture timeout for ${job.route}`)), timeout)
+      ),
+    ]);
+
+    // Enrich the result with scheme/locale info
+    result.colorScheme = job.colorScheme;
+    result.locale = job.locale;
+
+    // Update the filename to include scheme/locale if present
+    if (job.colorScheme || job.locale) {
+      const suffix = [job.colorScheme, job.locale].filter(Boolean).join("-");
+      const newName = `${result.name}-${suffix}`;
+      const newPath = result.path.replace(`${result.name}-`, `${newName}-`);
+      const { renameSync } = await import("node:fs");
+      try { renameSync(result.path, newPath); } catch { /* keep original */ }
+      result.name = newName;
+      result.path = newPath;
+    }
+
+    return result;
+  } catch (err) {
+    // Return a result with a warning instead of crashing
+    const baseName = routeToName(job.route);
+    const name = job.profileName ? `${baseName}-${job.profileName}` : baseName;
+    return {
+      name,
+      viewport: job.viewport.name,
+      profile: job.profileName,
+      colorScheme: job.colorScheme,
+      locale: job.locale,
+      path: "",
+      hash: "",
+      warnings: [{
+        type: "readiness_timeout",
+        message: `Failed to capture ${job.route}: ${err instanceof Error ? err.message : String(err)}`,
+        suggestion: "Check if the dev server is running and the route is accessible",
+      }],
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+/**
+ * Capture all configured routes at all viewports, color schemes, and locales.
+ * Supports parallel capture, device emulation, and per-route timeout.
  */
 export async function captureRoutes(
   config: DojoWatchConfig,
@@ -280,50 +427,45 @@ export async function captureRoutes(
   mkdirSync(outputDir, { recursive: true });
 
   const browser = await chromium.launch({ headless: true });
+  const jobs = buildCaptureJobs(config, routes);
+  const concurrency = config.smart?.concurrency ?? 4;
   const results: CaptureResult[] = [];
 
-  // Group routes by auth profile to minimize context creation
-  const routesByAuth = new Map<string, { storageState?: string; profileName?: string; routes: string[] }>();
-  for (const route of routes) {
-    const { storageState, profileName } = resolveAuthForRoute(route, config.auth);
-    const key = storageState ?? "__anonymous__";
-    if (!routesByAuth.has(key)) {
-      routesByAuth.set(key, { storageState, profileName, routes: [] });
-    }
-    routesByAuth.get(key)!.routes.push(route);
-  }
+  console.log(pc.dim(`  ${jobs.length} capture job(s), concurrency: ${concurrency}`));
 
   try {
-    for (const [, group] of routesByAuth) {
-      const context = await browser.newContext(
-        group.storageState ? { storageState: group.storageState } : undefined
-      );
-      const page = await context.newPage();
-
-      if (group.profileName) {
-        console.log(pc.dim(`  Auth profile: ${group.profileName}`));
-      }
-
-      for (const route of group.routes) {
-        for (const viewport of config.viewports) {
+    // Process jobs in batches for parallel capture
+    for (let i = 0; i < jobs.length; i += concurrency) {
+      const batch = jobs.slice(i, i + concurrency);
+      const batchResults = await Promise.all(
+        batch.map((job) => {
+          const schemeSuffix = job.colorScheme ? ` [${job.colorScheme}]` : "";
+          const localeSuffix = job.locale ? ` (${job.locale})` : "";
           console.log(
-            pc.dim(`  Capturing ${route} @ ${viewport.name} (${viewport.width}x${viewport.height})`)
+            pc.dim(`  Capturing ${job.route} @ ${job.viewport.name}${schemeSuffix}${localeSuffix}`)
           );
-          const result = await captureWithRetry(
-            page, config, route, viewport, outputDir, group.profileName
-          );
-          results.push(result);
-        }
-      }
-
-      await context.close();
+          return executeCaptureJob(browser, config, job, outputDir);
+        })
+      );
+      results.push(...batchResults);
     }
   } finally {
     await browser.close();
   }
 
-  // Report warnings
-  const allWarnings = results.flatMap((r) => r.warnings);
+  // Filter out failed captures (empty path)
+  const successful = results.filter((r) => r.path !== "");
+  const failed = results.filter((r) => r.path === "");
+
+  if (failed.length > 0) {
+    console.log(pc.yellow(`\n  ${failed.length} capture(s) failed:`));
+    for (const f of failed) {
+      console.log(pc.yellow(`    ${f.name}: ${f.warnings[0]?.message}`));
+    }
+  }
+
+  // Report warnings from successful captures
+  const allWarnings = successful.flatMap((r) => r.warnings);
   if (allWarnings.length > 0) {
     console.log(pc.yellow(`\n  ${allWarnings.length} warning(s):`));
     for (const w of allWarnings) {

@@ -97,7 +97,7 @@ function discoverNextAppRoutes(projectRoot: string): string[] {
 
     const rel = relative(appDir, filePath);
     const routePath = "/" + rel
-      .replace(/\/page\.(tsx?|jsx?)$/, "")
+      .replace(/\/?page\.(tsx?|jsx?)$/, "")
       .replace(/\(.*?\)\//g, "") // strip route groups like (dashboard)/
       .replace(/\[\.\.\..*?\]/g, "*") // catch-all [...slug]
       .replace(/\[(.*?)\]/g, ":$1"); // dynamic [id]

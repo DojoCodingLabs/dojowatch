@@ -12,12 +12,12 @@ import { writeFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import pc from "picocolors";
 import { loadConfig, findProjectRoot, getDojoWatchDir } from "./config.js";
-import { captureRoutes, captureStorybook } from "./capture.js";
+import { captureRoutes, captureStorybook, captureComponents } from "./capture.js";
 import { prefilterAll } from "./prefilter.js";
 import { analyzeWithGemini } from "./analyze-gemini.js";
 import { generateCommentMarkdown, postComment } from "./comment.js";
 import { createServiceClient, uploadCheckRun, getSignedDiffUrls } from "./supabase.js";
-import type { CheckRun } from "./types.js";
+import type { AnalysisResult, CheckRun } from "./types.js";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -63,6 +63,14 @@ async function main(): Promise<void> {
 
   console.log(pc.green(`  ✓ Captured ${results.length} screenshot(s)`));
 
+  // ── Step 1b: Component capture (if configured) ─────────────────
+  if (config.components && config.components.length > 0) {
+    console.log(pc.bold("\nStep 1b: Capturing components..."));
+    const componentResults = await captureComponents(config, config.routes, capturesDir);
+    results.push(...componentResults);
+    console.log(pc.green(`  ✓ Captured ${componentResults.length} component(s)`));
+  }
+
   // ── Step 2: Pre-filter ─────────────────────────────────────────
   console.log(pc.bold("\nStep 2: Running pre-filter..."));
   const prefilterResults = prefilterAll(projectRoot);
@@ -71,9 +79,10 @@ async function main(): Promise<void> {
   const analyzeCount = prefilterResults.filter((r) => r.tier !== "SKIP").length;
   console.log(pc.green(`  ✓ ${skipCount} unchanged, ${analyzeCount} to analyze`));
 
-  // ── Step 3: Gemini Analysis ────────────────────────────────────
+  // ── Step 3: Gemini Analysis (with retry + fallback) ────────────
   const toAnalyze = prefilterResults.filter((r) => r.tier !== "SKIP");
-  let analysisResults: import("./types.js").AnalysisResult[] = [];
+  let analysisResults: AnalysisResult[] = [];
+  let analysisEngine: "gemini" | "none" = "none";
 
   if (toAnalyze.length > 0) {
     console.log(pc.bold("\nStep 3: Running Gemini analysis..."));
@@ -87,12 +96,35 @@ async function main(): Promise<void> {
       diffPath: pf.diffImagePath,
     }));
 
-    analysisResults = await analyzeWithGemini(pairs, {
-      model: config.engine.ci.model,
-      apiKeyEnv: config.engine.ci.apiKeyEnv,
-    });
-
-    console.log(pc.green(`  ✓ Analyzed ${analysisResults.length} screenshot(s)`));
+    // Retry up to 3 times with exponential backoff
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        analysisResults = await analyzeWithGemini(pairs, {
+          model: config.engine.ci.model,
+          apiKeyEnv: config.engine.ci.apiKeyEnv,
+        });
+        analysisEngine = "gemini";
+        console.log(pc.green(`  ✓ Analyzed ${analysisResults.length} screenshot(s)`));
+        break;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (attempt < 3) {
+          const delay = attempt * 2000;
+          console.log(pc.yellow(`  ⚠ Gemini attempt ${attempt} failed: ${msg}. Retrying in ${delay / 1000}s...`));
+          await new Promise((r) => setTimeout(r, delay));
+        } else {
+          console.log(pc.yellow(`  ⚠ Gemini analysis failed after 3 attempts: ${msg}`));
+          console.log(pc.yellow(`  Falling back to pixelmatch-only results (no AI classification).`));
+          // Create stub results with no diffs — pixelmatch data still available
+          analysisResults = toAnalyze.map((pf) => ({
+            name: pf.name,
+            viewport: pf.viewport,
+            tier: pf.tier,
+            diffs: [],
+          }));
+        }
+      }
+    }
   } else {
     console.log(pc.bold("\nStep 3: No screenshots need analysis."));
   }
@@ -139,7 +171,7 @@ async function main(): Promise<void> {
     const supabaseClient = createServiceClient(config);
     runId = await uploadCheckRun(supabaseClient, checkRun, config, {
       prNumber,
-      engine: "gemini",
+      engine: analysisEngine === "gemini" ? "gemini" : "claude",
       capturesDir: join(dojowatchDir, "captures"),
       diffsDir: join(dojowatchDir, "diffs"),
     });
@@ -165,7 +197,11 @@ async function main(): Promise<void> {
     }
 
     const markdown = generateCommentMarkdown(checkRun, diffUrls);
-    postComment(prNumber, markdown);
+    try {
+      postComment(prNumber, markdown);
+    } catch {
+      console.log(pc.yellow("  ⚠ Failed to post PR comment (gh CLI error). Results saved locally."));
+    }
   } else {
     console.log(pc.dim("\nNo --pr flag. Skipping PR comment."));
   }

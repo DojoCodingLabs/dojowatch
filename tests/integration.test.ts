@@ -288,3 +288,99 @@ describe("DojoWatch auth support", () => {
     expect(results[0].hash).not.toBe(anonCaptures[0].hash);
   });
 });
+
+describe("DojoWatch advanced capture features", () => {
+  const ADV_TEST_DIR = join(import.meta.dirname, ".tmp-advanced-test");
+  const ADV_PORT = 9881;
+  let advServer: Server;
+
+  const THEMED_HTML = `<!DOCTYPE html>
+    <html><head>
+    <style>
+      @media (prefers-color-scheme: dark) { body { background: #000; color: #fff; } }
+      @media (prefers-color-scheme: light) { body { background: #fff; color: #000; } }
+      body { margin: 0; padding: 20px; font-family: sans-serif; }
+    </style>
+    </head><body><h1>Theme Test</h1><p>Content</p></body></html>`;
+
+  const baseConfig: DojoWatchConfig = {
+    project: "adv-test",
+    baseUrl: `http://localhost:${ADV_PORT}`,
+    viewports: [{ name: "desktop", width: 800, height: 600 }],
+    routes: ["/"],
+    maskSelectors: [],
+    engine: { local: { model: "claude" }, ci: { model: "gemini", apiKeyEnv: "KEY" } },
+    prefilter: { threshold: 0.05, clusterMinPixels: 500 },
+  };
+
+  beforeAll(async () => {
+    mkdirSync(join(ADV_TEST_DIR, ".dojowatch"), { recursive: true });
+    writeFileSync(join(ADV_TEST_DIR, ".dojowatch", "config.json"), JSON.stringify(baseConfig));
+
+    advServer = createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(THEMED_HTML);
+    });
+    await new Promise<void>((r) => advServer.listen(ADV_PORT, r));
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((r) => advServer.close(() => r()));
+    rmSync(ADV_TEST_DIR, { recursive: true, force: true });
+  });
+
+  it("captures with color schemes (light + dark produce different screenshots)", async () => {
+    const configWithSchemes: DojoWatchConfig = {
+      ...baseConfig,
+      colorSchemes: ["light", "dark"],
+    };
+    const capturesDir = join(ADV_TEST_DIR, ".dojowatch", "captures-schemes");
+    const results = await captureRoutes(configWithSchemes, ["/"], capturesDir);
+
+    // Should produce 2 captures: one light, one dark
+    expect(results.length).toBe(2);
+    expect(results[0].colorScheme).toBe("light");
+    expect(results[1].colorScheme).toBe("dark");
+    // Light and dark should have different hashes
+    expect(results[0].hash).not.toBe(results[1].hash);
+  });
+
+  it("captures with parallel concurrency", async () => {
+    const configParallel: DojoWatchConfig = {
+      ...baseConfig,
+      viewports: [
+        { name: "desktop", width: 800, height: 600 },
+        { name: "mobile", width: 375, height: 812 },
+      ],
+      smart: { concurrency: 2 },
+    };
+    const capturesDir = join(ADV_TEST_DIR, ".dojowatch", "captures-parallel");
+    const results = await captureRoutes(configParallel, ["/"], capturesDir);
+
+    expect(results.length).toBe(2);
+    expect(results.every((r) => r.path !== "")).toBe(true);
+  });
+
+  it("handles per-route capture timeout gracefully", async () => {
+    const configTimeout: DojoWatchConfig = {
+      ...baseConfig,
+      baseUrl: "http://localhost:1", // unreachable
+      smart: { routeTimeout: 2000 },
+    };
+    const capturesDir = join(ADV_TEST_DIR, ".dojowatch", "captures-timeout");
+    const results = await captureRoutes(configTimeout, ["/"], capturesDir);
+
+    // Should not crash — returns result with warning
+    expect(results.length).toBe(1);
+    expect(results[0].warnings.length).toBeGreaterThan(0);
+  });
+
+  it("captures include performance metrics", async () => {
+    const capturesDir = join(ADV_TEST_DIR, ".dojowatch", "captures-perf");
+    const results = await captureRoutes(baseConfig, ["/"], capturesDir);
+
+    expect(results.length).toBe(1);
+    // Performance metrics should be present (may be null for some values)
+    expect(results[0].performance).toBeDefined();
+  });
+});
