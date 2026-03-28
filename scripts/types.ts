@@ -4,6 +4,54 @@ export interface Viewport {
   name: string;
   width: number;
   height: number;
+  /** Device pixel ratio for retina screenshots. Default: 1. */
+  deviceScaleFactor?: number;
+  /** Whether to emulate touch events. */
+  isMobile?: boolean;
+  /** User-agent string override. */
+  userAgent?: string;
+}
+
+/** Well-known device presets that map to Playwright's devices. */
+export type DevicePreset =
+  | "iPhone 14"
+  | "iPhone 14 Pro Max"
+  | "iPhone SE"
+  | "iPad"
+  | "iPad Pro"
+  | "Pixel 7"
+  | "Galaxy S23"
+  | "Desktop Chrome"
+  | "Desktop Firefox"
+  | "Desktop Safari";
+
+export interface ComponentRegion {
+  /** CSS selector for the component to capture. */
+  selector: string;
+  /** Human-readable name for this component. */
+  name: string;
+}
+
+export interface PerformanceMetrics {
+  /** Largest Contentful Paint in ms. */
+  lcp: number | null;
+  /** Cumulative Layout Shift. */
+  cls: number | null;
+  /** First Contentful Paint in ms. */
+  fcp: number | null;
+  /** Time to First Byte in ms. */
+  ttfb: number | null;
+}
+
+export interface A11yViolation {
+  /** Rule ID (e.g., "color-contrast", "image-alt"). */
+  id: string;
+  /** Impact level. */
+  impact: "critical" | "serious" | "moderate" | "minor";
+  /** Human-readable description. */
+  description: string;
+  /** Number of elements affected. */
+  nodes: number;
 }
 
 export interface EngineConfig {
@@ -57,6 +105,12 @@ export interface SmartCaptureConfig {
   detectDynamicContent?: boolean;
   /** Framework-specific hydration signal selectors. Auto-detected if empty. */
   hydrationSelectors?: string[];
+  /** Parallel capture concurrency limit. Default: 4. */
+  concurrency?: number;
+  /** Compress PNGs before storage (reduces size ~60-80%). Default: false. */
+  compressPng?: boolean;
+  /** Per-route capture timeout in ms. Default: 30000. */
+  routeTimeout?: number;
 }
 
 export interface SupabaseConfig {
@@ -77,12 +131,20 @@ export interface DojoWatchConfig {
   baseUrl: string;
   /** Storybook instance URL. If present, enables Storybook crawling. */
   storybookUrl?: string;
-  /** Viewport configurations for capture. */
+  /** Viewport configurations for capture. Can include DevicePreset strings. */
   viewports: Viewport[];
+  /** Device preset names (resolved to Playwright device descriptors). */
+  devices?: DevicePreset[];
   /** URL paths to capture for full-page regression. */
   routes: string[];
   /** CSS selectors for elements to mask before capture. */
   maskSelectors: string[];
+  /** Named component regions for element-level capture. */
+  components?: ComponentRegion[];
+  /** Color schemes to capture. Default: page's natural scheme only. */
+  colorSchemes?: Array<"light" | "dark">;
+  /** Locales to capture (e.g., ["en", "ja", "ar"]). */
+  locales?: string[];
   /** Engine configuration. */
   engine: EngineConfig;
   /** Pre-filter configuration. */
@@ -118,10 +180,18 @@ export interface CaptureResult {
   viewport: string;
   /** Auth profile used (undefined = anonymous). */
   profile?: string;
+  /** Color scheme used (undefined = natural). */
+  colorScheme?: "light" | "dark";
+  /** Locale used (undefined = default). */
+  locale?: string;
   /** Absolute path to the captured PNG. */
   path: string;
   /** SHA-256 hash of the PNG file. */
   hash: string;
+  /** Performance metrics captured alongside the screenshot. */
+  performance?: PerformanceMetrics;
+  /** Accessibility violations found at capture time. */
+  a11yViolations?: A11yViolation[];
   /** Warnings from smart capture layer. */
   warnings: CaptureWarning[];
 }

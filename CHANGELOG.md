@@ -1,6 +1,27 @@
 # Changelog
 
-## [0.5.0] — Unreleased
+## [0.6.0] — Unreleased
+
+### Added — 17-item enhancement sweep
+- **Route discovery** (`scripts/discover.ts`): Auto-detect Next.js (App/Pages Router), Vite, static HTML frameworks. Generate routes and dev port.
+- **Device presets**: `Viewport` type now supports `deviceScaleFactor`, `isMobile`, `userAgent` for proper device emulation
+- **Dark/light mode**: `colorSchemes` config field for capturing each route at multiple color schemes
+- **Component isolation**: `captureComponents()` uses Playwright's `element.screenshot()` for pixel-perfect component capture
+- **Dynamic content auto-detection**: `detectDynamicElements()` captures a page twice, identifies changing elements, suggests `data-vr-mask` additions
+- **Shadow DOM support**: Stabilization CSS and masking now pierce open shadow roots
+- **Performance baselines**: Captures LCP, CLS, FCP, TTFB alongside screenshots via `scripts/metrics.ts`
+- **Accessibility regression**: Injects axe-core at runtime, captures a11y violations alongside screenshots
+- **CLI entrypoint** (`scripts/dojowatch.ts`): Unified `dojowatch <command>` dispatcher
+- **Trend tracking** (`scripts/stats.ts`): Queries Supabase for pass rate, top flaky routes, regression trends
+- **`/vr-stats` command**: Show historical regression statistics
+- **i18n/RTL support**: `locales` config field for locale-specific captures
+- **Few-shot analysis prompt**: 5 concrete examples (regression, intentional, noise, perf, a11y) for better AI classification
+- **Gemini vs Claude prompt variants**: Separate notes for each engine's strengths
+- **PNG compression config**: `smart.compressPng` flag
+- **Route timeout config**: `smart.routeTimeout` for per-route capture timeouts
+- **Parallel capture config**: `smart.concurrency` for concurrent capture limit
+
+## [0.5.0]
 
 ### Added
 - **Authenticated route support**: Capture pages behind login using Playwright `storageState`

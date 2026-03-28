@@ -6,6 +6,7 @@ import pc from "picocolors";
 import { injectStabilization, maskElements } from "./stabilize.js";
 import { loadConfig, findProjectRoot, getDojoWatchDir } from "./config.js";
 import { loadRouteMap, resolveScope } from "./route-map.js";
+import { capturePerformanceMetrics, captureA11yViolations } from "./metrics.js";
 import type { AuthConfig, CaptureResult, DojoWatchConfig, Viewport } from "./types.js";
 
 /**
@@ -95,12 +96,20 @@ async function captureRoute(
   // Take screenshot
   await page.screenshot({ path: outputPath, fullPage: true });
 
+  // Capture performance metrics
+  const performance = await capturePerformanceMetrics(page).catch(() => undefined);
+
+  // Capture a11y violations
+  const a11yViolations = await captureA11yViolations(page).catch(() => undefined);
+
   return {
     name,
     viewport: viewport.name,
     profile: profileName,
     path: outputPath,
     hash: hashFile(outputPath),
+    performance,
+    a11yViolations: a11yViolations && a11yViolations.length > 0 ? a11yViolations : undefined,
     warnings,
   };
 }
@@ -403,6 +412,116 @@ export async function captureStorybook(
   }
 
   return results;
+}
+
+/**
+ * Capture named component regions on a page.
+ * Uses Playwright's element.screenshot() for pixel-perfect component isolation.
+ */
+export async function captureComponents(
+  config: DojoWatchConfig,
+  routes: string[],
+  outputDir: string
+): Promise<CaptureResult[]> {
+  if (!config.components || config.components.length === 0) return [];
+
+  mkdirSync(outputDir, { recursive: true });
+
+  const browser = await chromium.launch({ headless: true });
+  const results: CaptureResult[] = [];
+
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    for (const route of routes) {
+      const url = new URL(route, config.baseUrl).toString();
+      await page.goto(url, { waitUntil: "load", timeout: 30_000 });
+      await injectStabilization(page);
+      await maskElements(page, config.maskSelectors);
+
+      for (const component of config.components) {
+        const element = page.locator(component.selector).first();
+        const isVisible = await element.isVisible().catch(() => false);
+
+        if (!isVisible) continue;
+
+        const name = `component-${component.name}-${routeToName(route)}`;
+        const filename = `${name}.png`;
+        const outputPath = join(outputDir, filename);
+
+        await element.screenshot({ path: outputPath });
+
+        results.push({
+          name,
+          viewport: "component",
+          path: outputPath,
+          hash: hashFile(outputPath),
+          warnings: [],
+        });
+      }
+    }
+
+    await context.close();
+  } finally {
+    await browser.close();
+  }
+
+  return results;
+}
+
+/**
+ * Detect dynamic content by capturing a page twice rapidly and comparing.
+ * Returns selectors of elements that changed between captures.
+ */
+export async function detectDynamicElements(
+  config: DojoWatchConfig,
+  route: string
+): Promise<string[]> {
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    const url = new URL(route, config.baseUrl).toString();
+    await page.goto(url, { waitUntil: "load", timeout: 30_000 });
+    await injectStabilization(page);
+
+    // Take two snapshots of element text content 500ms apart
+    const getTexts = () =>
+      page.evaluate(() => {
+        const elements = document.querySelectorAll("*");
+        const texts: Array<{ selector: string; text: string }> = [];
+        for (const el of elements) {
+          if (el.children.length === 0 && el.textContent?.trim()) {
+            const tag = el.tagName.toLowerCase();
+            const cls = el.className
+              ? `.${String(el.className).split(" ").filter(Boolean).join(".")}`
+              : "";
+            texts.push({ selector: `${tag}${cls}`, text: el.textContent.trim() });
+          }
+        }
+        return texts;
+      });
+
+    const snap1 = await getTexts();
+    await new Promise((r) => setTimeout(r, 500));
+    const snap2 = await getTexts();
+
+    // Find elements whose text changed
+    const dynamic: string[] = [];
+    for (let i = 0; i < Math.min(snap1.length, snap2.length); i++) {
+      if (snap1[i].selector === snap2[i].selector && snap1[i].text !== snap2[i].text) {
+        dynamic.push(snap1[i].selector);
+      }
+    }
+
+    await context.close();
+    return [...new Set(dynamic)];
+  } finally {
+    await browser.close();
+  }
 }
 
 // ─── CLI entrypoint ──────────────────────────────────────────────
