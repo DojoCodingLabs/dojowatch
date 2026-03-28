@@ -26,6 +26,15 @@ export interface PrefilterConfig {
   clusterMinPixels: number;
 }
 
+export interface AuthConfig {
+  /** Default Playwright storageState file for authenticated captures. */
+  storageState?: string;
+  /** Named auth profiles mapping to storageState files (e.g., { "admin": "e2e/.auth/admin.json" }). */
+  profiles?: Record<string, string>;
+  /** Maps routes to profile names. null = anonymous (no auth). Unlisted routes use default storageState. */
+  routes?: Record<string, string | null>;
+}
+
 export interface SupabaseConfig {
   /** Supabase project URL. Read from env var in CI, .env.local locally. */
   url: string;
@@ -54,6 +63,8 @@ export interface DojoWatchConfig {
   engine: EngineConfig;
   /** Pre-filter configuration. */
   prefilter: PrefilterConfig;
+  /** Authentication configuration. Optional — when absent, captures run as anonymous. */
+  auth?: AuthConfig;
   /** Supabase configuration. Optional — when absent, local file storage is used. */
   supabase?: SupabaseConfig;
 }

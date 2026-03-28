@@ -51,6 +51,39 @@ DojoWatch is configured via `.dojowatch/config.json`:
 - `/vr-report` — Generate markdown summary of last check
 - `/vr-watch` — File watcher with live re-capture (coming soon)
 
+## Authenticated Routes
+
+DojoWatch supports capturing pages behind authentication via Playwright's `storageState`:
+
+```json
+{
+  "auth": {
+    "storageState": ".dojowatch/auth.json",
+    "profiles": {
+      "admin": "e2e/.auth/admin.json",
+      "student": "e2e/.auth/student.json"
+    },
+    "routes": {
+      "/": null,
+      "/dashboard": "student",
+      "/admin": "admin"
+    }
+  }
+}
+```
+
+- **`storageState`** — default auth file for all routes (cookies + localStorage)
+- **`profiles`** — named profiles mapping to different auth state files
+- **`routes`** — per-route profile assignment. `null` = anonymous. Unlisted routes use the default.
+
+To generate an auth state file:
+```bash
+npx playwright codegen --save-storage=.dojowatch/auth.json http://localhost:3000
+```
+This opens a browser — log in manually, then close it. The session is saved.
+
+For automated CI, use a setup script that logs in via your auth provider's API (Supabase, Clerk, NextAuth) and saves the storageState file. See DojoOS's `e2e/global-setup.ts` for an example.
+
 ## File Structure
 - `.dojowatch/config.json` — Project configuration
 - `.dojowatch/routeMap.json` — Source file → route mapping

@@ -6,7 +6,7 @@ import pc from "picocolors";
 import { injectStabilization, maskElements } from "./stabilize.js";
 import { loadConfig, findProjectRoot, getDojoWatchDir } from "./config.js";
 import { loadRouteMap, resolveScope } from "./route-map.js";
-import type { CaptureResult, DojoWatchConfig, Viewport } from "./types.js";
+import type { AuthConfig, CaptureResult, DojoWatchConfig, Viewport } from "./types.js";
 
 /**
  * Derive a filesystem-safe name from a route path.
@@ -70,7 +70,32 @@ async function captureRoute(
 }
 
 /**
+ * Resolve which storageState file to use for a given route.
+ * Returns undefined for anonymous access.
+ */
+function resolveAuthForRoute(
+  route: string,
+  auth?: AuthConfig
+): string | undefined {
+  if (!auth) return undefined;
+
+  // Check per-route mapping first
+  if (auth.routes && route in auth.routes) {
+    const profileName = auth.routes[route];
+    if (profileName === null) return undefined; // explicitly anonymous
+    if (auth.profiles && profileName in auth.profiles) {
+      return auth.profiles[profileName];
+    }
+    return undefined;
+  }
+
+  // Fall back to default storageState
+  return auth.storageState;
+}
+
+/**
  * Capture all configured routes at all viewports.
+ * Supports authenticated captures via Playwright storageState.
  */
 export async function captureRoutes(
   config: DojoWatchConfig,
@@ -82,21 +107,39 @@ export async function captureRoutes(
   const browser = await chromium.launch({ headless: true });
   const results: CaptureResult[] = [];
 
+  // Group routes by auth profile to minimize context creation
+  const routesByAuth = new Map<string | undefined, string[]>();
+  for (const route of routes) {
+    const authFile = resolveAuthForRoute(route, config.auth);
+    const key = authFile ?? "__anonymous__";
+    if (!routesByAuth.has(key)) routesByAuth.set(key, []);
+    routesByAuth.get(key)!.push(route);
+  }
+
   try {
-    const context = await browser.newContext();
-    const page = await context.newPage();
+    for (const [authKey, groupedRoutes] of routesByAuth) {
+      const storageState = authKey === "__anonymous__" ? undefined : authKey;
+      const context = await browser.newContext(
+        storageState ? { storageState } : undefined
+      );
+      const page = await context.newPage();
 
-    for (const route of routes) {
-      for (const viewport of config.viewports) {
-        console.log(
-          pc.dim(`  Capturing ${route} @ ${viewport.name} (${viewport.width}x${viewport.height})`)
-        );
-        const result = await captureRoute(page, config, route, viewport, outputDir);
-        results.push(result);
+      if (storageState) {
+        console.log(pc.dim(`  Auth: ${storageState}`));
       }
-    }
 
-    await context.close();
+      for (const route of groupedRoutes) {
+        for (const viewport of config.viewports) {
+          console.log(
+            pc.dim(`  Capturing ${route} @ ${viewport.name} (${viewport.width}x${viewport.height})`)
+          );
+          const result = await captureRoute(page, config, route, viewport, outputDir);
+          results.push(result);
+        }
+      }
+
+      await context.close();
+    }
   } finally {
     await browser.close();
   }

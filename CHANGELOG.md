@@ -1,6 +1,17 @@
 # Changelog
 
-## [0.4.0] — Unreleased
+## [0.5.0] — Unreleased
+
+### Added
+- **Authenticated route support**: Capture pages behind login using Playwright `storageState`
+  - `auth.storageState` — default auth file for all routes
+  - `auth.profiles` — named profiles (admin, student, etc.) mapping to different auth state files
+  - `auth.routes` — per-route profile assignment (null = anonymous)
+  - Routes grouped by auth profile to minimize browser context creation
+  - Generate auth state: `npx playwright codegen --save-storage=.dojowatch/auth.json`
+- Auth state files (`.dojowatch/auth*.json`) added to `.gitignore`
+
+## [0.4.0]
 
 ### Added
 - **Supabase data layer** (`scripts/supabase.ts`): Full Supabase integration for shared storage

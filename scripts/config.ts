@@ -100,6 +100,13 @@ function mergeConfig(
       ...defaults.prefilter,
       ...overrides.prefilter,
     },
+    auth: overrides.auth
+      ? {
+          storageState: overrides.auth.storageState,
+          profiles: overrides.auth.profiles,
+          routes: overrides.auth.routes,
+        }
+      : undefined,
     supabase: overrides.supabase
       ? {
           url: overrides.supabase.url,

@@ -194,6 +194,35 @@ Add `data-vr-mask` to elements that change between captures — timestamps, avat
 
 DojoWatch replaces masked elements with solid placeholders before capture, preventing false positives.
 
+### Authenticated Routes
+
+Most apps have protected routes (dashboards, admin panels, settings). DojoWatch supports Playwright's `storageState` to capture these pages as a logged-in user:
+
+```json
+{
+  "auth": {
+    "storageState": ".dojowatch/auth.json",
+    "profiles": {
+      "admin": "e2e/.auth/admin.json",
+      "student": "e2e/.auth/student.json"
+    },
+    "routes": {
+      "/": null,
+      "/dashboard": "student",
+      "/admin": "admin"
+    }
+  }
+}
+```
+
+Generate an auth state file by logging in manually:
+
+```bash
+npx playwright codegen --save-storage=.dojowatch/auth.json http://localhost:3000
+```
+
+For CI, use a setup script that authenticates via your provider's API (Supabase, Clerk, Auth.js) and saves the state file before DojoWatch runs.
+
 ### Storybook Support
 
 Point `storybookUrl` at your Storybook instance. DojoWatch crawls `stories.json`, captures every story in isolation, and provides component-level regression detection — equivalent to Chromatic's core offering.

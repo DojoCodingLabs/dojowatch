@@ -189,3 +189,102 @@ describe("DojoWatch integration pipeline", () => {
     expect(markdown).toContain("Intentional changes");
   });
 });
+
+describe("DojoWatch auth support", () => {
+  const AUTH_TEST_DIR = join(import.meta.dirname, ".tmp-auth-test");
+  const AUTH_PORT = 9879;
+  let authServer: Server;
+
+  const PROTECTED_HTML = `<!DOCTYPE html><html><body>
+    <h1 id="status">Please log in</h1>
+    <script>
+      if (document.cookie.includes('session=authenticated')) {
+        document.getElementById('status').textContent = 'Welcome, authenticated user!';
+      }
+    </script>
+  </body></html>`;
+
+  const authConfig: DojoWatchConfig = {
+    project: "auth-test",
+    baseUrl: `http://localhost:${AUTH_PORT}`,
+    viewports: [{ name: "desktop", width: 800, height: 600 }],
+    routes: ["/"],
+    maskSelectors: [],
+    engine: {
+      local: { model: "claude" },
+      ci: { model: "gemini", apiKeyEnv: "KEY" },
+    },
+    prefilter: { threshold: 0.05, clusterMinPixels: 500 },
+  };
+
+  beforeAll(async () => {
+    mkdirSync(join(AUTH_TEST_DIR, ".dojowatch"), { recursive: true });
+    writeFileSync(
+      join(AUTH_TEST_DIR, ".dojowatch", "config.json"),
+      JSON.stringify(authConfig)
+    );
+
+    authServer = createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(PROTECTED_HTML);
+    });
+
+    await new Promise<void>((resolve) => {
+      authServer.listen(AUTH_PORT, resolve);
+    });
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => {
+      authServer.close(() => resolve());
+    });
+    rmSync(AUTH_TEST_DIR, { recursive: true, force: true });
+  });
+
+  it("captures anonymous page when no auth is configured", async () => {
+    const capturesDir = join(AUTH_TEST_DIR, ".dojowatch", "captures");
+    const results = await captureRoutes(authConfig, ["/"], capturesDir);
+
+    expect(results).toHaveLength(1);
+    expect(existsSync(results[0].path)).toBe(true);
+  });
+
+  it("captures authenticated page when storageState provides session cookie", async () => {
+    // Create a storageState file with the session cookie
+    const storageState = {
+      cookies: [
+        {
+          name: "session",
+          value: "authenticated",
+          domain: "localhost",
+          path: "/",
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax" as const,
+        },
+      ],
+      origins: [],
+    };
+
+    const authStatePath = join(AUTH_TEST_DIR, ".dojowatch", "auth.json");
+    writeFileSync(authStatePath, JSON.stringify(storageState));
+
+    // Capture with auth
+    const configWithAuth: DojoWatchConfig = {
+      ...authConfig,
+      auth: { storageState: authStatePath },
+    };
+    const capturesDir = join(AUTH_TEST_DIR, ".dojowatch", "captures-auth");
+    const results = await captureRoutes(configWithAuth, ["/"], capturesDir);
+
+    expect(results).toHaveLength(1);
+    expect(existsSync(results[0].path)).toBe(true);
+
+    // The hashes should differ — anonymous vs authenticated show different content
+    const anonDir = join(AUTH_TEST_DIR, ".dojowatch", "captures");
+    const anonCaptures = await captureRoutes(authConfig, ["/"], anonDir);
+
+    expect(results[0].hash).not.toBe(anonCaptures[0].hash);
+  });
+});

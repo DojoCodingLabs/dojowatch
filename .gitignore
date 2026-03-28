@@ -7,6 +7,9 @@ dist/
 # DojoWatch runtime artifacts (captures and diffs are ephemeral)
 .dojowatch/captures/
 .dojowatch/diffs/
+.dojowatch/auth*.json
+.dojowatch/last-check.json
+.dojowatch/prefilter-report.json
 
 # Environment
 .env

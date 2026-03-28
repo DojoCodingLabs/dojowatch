@@ -26,6 +26,18 @@
       "apiKeyEnv": "GOOGLE_GENAI_API_KEY"
     }
   },
+  "auth": {
+    "storageState": ".dojowatch/auth.json",
+    "profiles": {
+      "admin": "e2e/.auth/admin.json",
+      "student": "e2e/.auth/student.json"
+    },
+    "routes": {
+      "/": null,
+      "/dashboard": "student",
+      "/admin": "admin"
+    }
+  },
   "prefilter": {
     "threshold": 0.05,
     "clusterMinPixels": 500
