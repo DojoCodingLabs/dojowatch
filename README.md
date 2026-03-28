@@ -20,16 +20,16 @@ Source change → Playwright capture → pixelmatch pre-filter → AI analysis �
 ### As a Claude Code plugin
 
 ```bash
-# From the marketplace (coming soon)
-/plugin install dojowatch
-
-# From GitHub
+# From GitHub (recommended)
 claude plugin add --git https://github.com/DojoCodingLabs/dojowatch
+
+# Local development
+claude --plugin-dir /path/to/dojowatch
 ```
 
-### For CI only
+### For CI
 
-Clone or add as a git submodule in your project. The CI scripts run standalone via `npx tsx`.
+Clone or add as a git submodule. The CI scripts run standalone via `npx tsx`.
 
 ## Quick start
 
