@@ -186,10 +186,10 @@ export async function insertDiffs(
         run_id: runId,
         name: pf.name,
         viewport: pf.viewport,
-        baseline_storage_path: `${project}/${pf.name}.png`,
-        current_storage_path: `${project}/captures/${pf.name}.png`,
+        baseline_storage_path: `${project}/${pf.name}-${pf.viewport}.png`,
+        current_storage_path: `${project}/captures/${runId}/${pf.name}.png`,
         diff_storage_path: pf.diffImagePath
-          ? `${project}/diffs/${basename(pf.diffImagePath)}`
+          ? `${project}/diffs/${runId}/${basename(pf.diffImagePath)}`
           : null,
         pixel_diff_percent: pf.pixelDiffPercent,
         tier: pf.tier,

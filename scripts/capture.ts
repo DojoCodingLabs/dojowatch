@@ -124,8 +124,15 @@ export async function captureStorybook(
     );
   }
 
-  const storiesData = (await response.json()) as Record<string, { id: string; title: string; name: string }>;
-  const storyIds = Object.keys(storiesData);
+  const rawData = (await response.json()) as
+    | { v: number; stories: Record<string, { id: string; title: string; name: string }> }
+    | Record<string, { id: string; title: string; name: string }>;
+
+  // Storybook v7+ wraps stories under a "stories" key
+  const storiesData = "stories" in rawData && typeof rawData.stories === "object"
+    ? rawData.stories
+    : rawData;
+  const storyIds = Object.keys(storiesData).filter((k) => k !== "v");
 
   console.log(pc.dim(`  Found ${storyIds.length} Storybook stories`));
 

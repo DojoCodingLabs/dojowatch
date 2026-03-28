@@ -18,7 +18,7 @@ Start a file watcher that re-captures affected routes when source files change, 
    - Look up the saved file in `.dojowatch/routeMap.json` to find affected routes
    - If the file maps to routes, run a scoped capture:
      ```bash
-     npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/capture.ts --routes <affected-routes>
+     npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/capture.ts --scope=staged
      ```
    - Run quick prefilter comparison against baselines
    - Report any visual changes inline (pixel diff count, affected areas)

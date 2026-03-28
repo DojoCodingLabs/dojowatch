@@ -38,7 +38,7 @@ Initialize DojoWatch in the current project. This sets up the configuration, dis
 
 7. **Initial capture.** If the user confirms, remind them to start their dev server, then run:
    ```bash
-   npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/capture.ts --config .dojowatch/config.json --scope all
+   npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/capture.ts --scope=all
    ```
 
 8. **Promote to baselines.** Run:

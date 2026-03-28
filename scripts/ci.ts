@@ -21,8 +21,10 @@ import type { CheckRun } from "./types.js";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const prArg = args.find((a) => a.startsWith("--pr="))?.split("=")[1]
-    ?? args[args.indexOf("--pr") + 1];
+  const prEqArg = args.find((a) => a.startsWith("--pr="))?.split("=")[1];
+  const prFlagIdx = args.indexOf("--pr");
+  const prSpaceArg = prFlagIdx !== -1 ? args[prFlagIdx + 1] : undefined;
+  const prArg = prEqArg ?? prSpaceArg;
   const prNumber = prArg ? parseInt(prArg, 10) : undefined;
   const uploadFlag = args.includes("--upload");
 
@@ -210,7 +212,12 @@ function getGitCommitSha(): string {
   }
 }
 
-main().catch((err) => {
-  console.error(pc.red(`CI failed: ${err}`));
-  process.exit(1);
-});
+const isDirectRun =
+  process.argv[1]?.endsWith("ci.ts") ||
+  process.argv[1]?.endsWith("ci.js");
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(pc.red(`CI failed: ${err}`));
+    process.exit(1);
+  });
+}

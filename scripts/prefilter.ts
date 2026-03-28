@@ -129,11 +129,12 @@ function floodFill(
 ): Array<[number, number]> {
   const pixels: Array<[number, number]> = [];
   const queue: Array<[number, number]> = [[startX, startY]];
+  let queueHead = 0;
 
   visited[startY * width + startX] = 1;
 
-  while (queue.length > 0) {
-    const [cx, cy] = queue.shift()!;
+  while (queueHead < queue.length) {
+    const [cx, cy] = queue[queueHead++];;
     pixels.push([cx, cy]);
 
     // Check 8 neighbors (including diagonals)

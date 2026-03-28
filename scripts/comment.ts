@@ -2,6 +2,11 @@ import { execFileSync } from "node:child_process";
 import pc from "picocolors";
 import type { AnalysisResult, CheckRun, DiffResult } from "./types.js";
 
+/** Escape pipe and newline characters for use inside markdown table cells. */
+function escMd(text: string): string {
+  return text.replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
 /**
  * Generate a markdown comment body from analysis results.
  */
@@ -53,7 +58,7 @@ export function generateCommentMarkdown(
       const diffUrl = diffUrls?.get(name);
       const thumbnailCol = diffUrl ? ` [![diff](${diffUrl})](${diffUrl})` : "";
       lines.push(
-        `| ${sev} | ${screenshot}: ${diff.element}${thumbnailCol} | ${diff.description} | ${diff.suggested_fix ?? "—"} |`
+        `| ${sev} | ${escMd(screenshot)}: ${escMd(diff.element)}${thumbnailCol} | ${escMd(diff.description)} | ${escMd(diff.suggested_fix ?? "—")} |`
       );
     }
     lines.push("");
