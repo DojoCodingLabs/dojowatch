@@ -1,13 +1,25 @@
-# DojoWatch — AI-Native Visual Regression Testing
+<p align="center">
+  <a href="https://dojocoding.io">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
+      <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.svg">
+      <img alt="DojoWatch by Dojo Coding: AI-native visual regression testing" src="docs/assets/banner-light.svg" width="100%">
+    </picture>
+  </a>
+</p>
 
-[![Claude Code Plugin](https://img.shields.io/badge/Claude_Code-Plugin-blue?logo=anthropic&logoColor=white)](https://github.com/DojoCodingLabs/dojowatch)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Category: Testing](https://img.shields.io/badge/Category-Testing-purple)](https://github.com/topics/claude-code-plugin)
-[![Free & Open Source](https://img.shields.io/badge/Free-Open_Source-brightgreen)](https://github.com/DojoCodingLabs/dojowatch)
+# DojoWatch
 
-### Open-source visual regression testing that uses AI to tell you *what* changed, *why*, and *how to fix it* — by [Dojo Coding](https://dojocoding.io)
+**Open-source visual regression testing for builders who ship web UIs, with AI that tells you what changed, why, and how to fix it.**
 
 **DojoWatch** is a **Claude Code plugin** and **GitHub Actions CI tool** that catches visual regressions before they reach production. Unlike Percy, Chromatic, or Applitools — it costs nothing. It uses the AI models you already have.
+
+[![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-201E3D?labelColor=201E3D)](https://github.com/DojoCodingLabs/dojowatch)
+[![License: MIT](https://img.shields.io/badge/License-MIT-FF7151?labelColor=201E3D)](https://opensource.org/licenses/MIT)
+[![Category: Testing](https://img.shields.io/badge/Category-Testing-FF7151?labelColor=201E3D)](https://github.com/topics/claude-code-plugin)
+[![Free & Open Source](https://img.shields.io/badge/Free-Open%20Source-FF7151?labelColor=201E3D)](https://github.com/DojoCodingLabs/dojowatch)
+
+[Get started](#installation) · [Commands](#commands) · [CI setup](#ci-setup-github-actions) · [Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/DojoCodingLabs/dojowatch/issues/new)
 
 ---
 
@@ -325,11 +337,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
 ## License
 
-MIT License — free to use, modify, and distribute.
-
----
+MIT License — free to use, modify, and distribute. Built by [Dojo Coding](https://dojocoding.io).
 
 <p align="center">
-  <strong>Stop shipping visual regressions. Start shipping with confidence.</strong><br>
-  <em>Free. Open source. By <a href="https://dojocoding.io">Dojo Coding</a>.</em>
+  <a href="https://dojocoding.io"><img src="docs/assets/dojocoding-mark.png" alt="Dojo Coding" width="48"></a>
 </p>
