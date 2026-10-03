@@ -1,0 +1,12 @@
+name = "DojoWatch"
+tagline = "AI-native [visual regression] testing"
+chips = ["Plugin / GitHub Actions"]
+meta = "Open source · Claude Code"
+tile = "/"
+
+[card]
+kind = "terminal"
+label = "Claude Code"
+status = "v0.6.0 · MIT"
+lines = ["/dojowatch:vr-init", "/dojowatch:vr-check", "/dojowatch:vr-approve"]
+dim = "regression · intentional · noise"
